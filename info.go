@@ -20,8 +20,8 @@ type Info struct {
 	FirmwareVersion string
 }
 
-//GetInfo .
-func (vs *VideoSwitcher) GetInfo(ctx context.Context) (Info, error) {
+//Info .
+func (vs *VideoSwitcher) Info(ctx context.Context) (Info, error) {
 	var resp Info
 
 	if vs.Pool.Logger != nil {

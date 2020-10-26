@@ -16,8 +16,8 @@ var (
 	regGetInput   = regexp.MustCompile("Video Output  *: Input = ([0-9]{2}),")
 )
 
-// GetAudioVideoInputs .
-func (vs *VideoSwitcher) GetAudioVideoInputs(ctx context.Context) (map[string]string, error) {
+// AudioVideoInputs .
+func (vs *VideoSwitcher) AudioVideoInputs(ctx context.Context) (map[string]string, error) {
 	toReturn := make(map[string]string)
 
 	var input string
