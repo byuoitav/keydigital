@@ -79,3 +79,12 @@ func (vs *VideoSwitcher) Info(ctx context.Context) (Info, error) {
 
 	return resp, nil
 }
+
+func (vs *VideoSwitcher) Healthy(ctx context.Context) error {
+	_, err := vs.AudioVideoInputs(ctx)
+	if err != nil {
+		return fmt.Errorf("unable to get inputs (not healthy): %s", err)
+	}
+
+	return nil
+}
