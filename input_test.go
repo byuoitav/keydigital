@@ -15,6 +15,7 @@ func TestGetInput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// vs := NewVideoSwitcher("BRMB-382-SW1.byu.edu", WithLogger(zap.NewExample()))
 	vs := NewVideoSwitcher("JFSB-B132-SW1.byu.edu", WithLogger(zap.NewExample()))
 
 	inputs, err := vs.AudioVideoInputs(ctx)

@@ -43,12 +43,12 @@ func (vs *VideoSwitcher) AudioVideoInputs(ctx context.Context) (map[string]strin
 
 		var match [][]string
 		for len(match) == 0 {
-			c, err := conn.ReadUntil(asciiCarriageReturn, deadline)
+			buf, err := conn.ReadUntil(asciiCarriageReturn, deadline)
 			if err != nil {
 				return fmt.Errorf("unable to read from connection: %w", err)
 			}
 
-			match = regGetInput.FindAllStringSubmatch(string(c), -1)
+			match = regGetInput.FindAllStringSubmatch(string(buf), -1)
 		}
 
 		inputs[""] = strings.TrimPrefix(match[0][1], "0")

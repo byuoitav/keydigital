@@ -1,6 +1,19 @@
 package keydigital
 
-/*
+import (
+	"context"
+	"fmt"
+	"regexp"
+	"time"
+
+	"github.com/byuoitav/connpool"
+)
+
+type info struct {
+	IPAddress       string
+	MACAddress      string
+	FirmwareVersion string
+}
 
 var (
 	regIPAddr  = regexp.MustCompile("Host IP Address = ([0-9]{3}.[0-9]{3}.[0-9]{3}.[0-9]{3})")
@@ -8,78 +21,64 @@ var (
 	regVersion = regexp.MustCompile("Version : ([0-9]+.[0-9]+)")
 )
 
-type Info struct {
-	IPAddress       string
-	MACAddress      string
-	FirmwareVersion string
-}
+func (vs *VideoSwitcher) Info(ctx context.Context) (interface{}, error) {
+	vs.log.Info("Getting info")
+	var info info
 
-//Info .
-func (vs *VideoSwitcher) Info(ctx context.Context) (Info, error) {
-	var resp Info
+	err := vs.pool.Do(ctx, func(conn connpool.Conn) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(10 * time.Second)
+		}
 
-	if vs.Pool.Logger != nil {
-		vs.Pool.Logger.Infof("getting hardware info")
-	}
+		if err := conn.SetDeadline(deadline); err != nil {
+			return fmt.Errorf("unable to set connection deadline: %w", err)
+		}
 
-	err := vs.Pool.Do(ctx, func(conn connpool.Conn) error {
 		cmd := []byte("STA\r\n")
 		n, err := conn.Write(cmd)
 		switch {
 		case err != nil:
-			return fmt.Errorf("failed to write to connection: %w", err)
+			return fmt.Errorf("unable to write to connection: %w", err)
 		case n != len(cmd):
-			return fmt.Errorf("failed to write to connection: wrote %v/%v bytes", n, len(cmd))
+			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(cmd))
 		}
 
-		var match [][]string
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			return fmt.Errorf("no deadline set")
-		}
-		for len(match) == 0 {
-			buf, err := conn.ReadUntil(carriageReturn, deadline)
+		for len(info.FirmwareVersion) == 0 || len(info.IPAddress) == 0 || len(info.MACAddress) == 0 {
+			buf, err := conn.ReadUntil(asciiCarriageReturn, deadline)
 			if err != nil {
-				return fmt.Errorf("failed to read from connection: %w", err)
+				return fmt.Errorf("unable to read from connection: %w", err)
 			}
 
-			// TODO make sure match[0] exists (and match[0][1])
-
-			// Mac Address
-			match = regMacAddr.FindAllStringSubmatch(string(buf), -1)
-			if len(match) >= 1 {
-				resp.MACAddress = match[0][1]
+			if len(info.FirmwareVersion) == 0 {
+				match := regVersion.FindAllStringSubmatch(string(buf), -1)
+				if len(match) > 0 {
+					info.FirmwareVersion = match[0][1]
+				}
 			}
 
-			// Version
-			match = regVersion.FindAllStringSubmatch(string(buf), -1)
-			if len(match) >= 1 {
-				resp.FirmwareVersion = match[0][1]
+			if len(info.IPAddress) == 0 {
+				match := regIPAddr.FindAllStringSubmatch(string(buf), -1)
+				if len(match) > 0 {
+					info.IPAddress = match[0][1]
+				}
 			}
 
-			// IP Address
-			match = regIPAddr.FindAllStringSubmatch(string(buf), -1)
-			if len(match) >= 1 {
-				resp.IPAddress = match[0][1]
+			if len(info.MACAddress) == 0 {
+				match := regMacAddr.FindAllStringSubmatch(string(buf), -1)
+				if len(match) > 0 {
+					info.MACAddress = match[0][1]
+				}
 			}
 		}
 
 		return nil
 	})
 
-	if err != nil {
-		return resp, err
-	}
-
-	return resp, nil
+	return info, err
 }
 
 func (vs *VideoSwitcher) Healthy(ctx context.Context) error {
 	_, err := vs.AudioVideoInputs(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to get inputs (not healthy): %s", err)
-	}
-
-	return nil
+	return err
 }
-*/
