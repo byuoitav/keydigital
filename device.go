@@ -6,35 +6,39 @@ import (
 	"time"
 
 	"github.com/byuoitav/connpool"
+	"go.uber.org/zap"
+)
+
+const (
+	asciiCarriageReturn = 0x0d
 )
 
 type VideoSwitcher struct {
-	Address string
-	Pool    *connpool.Pool
+	pool *connpool.Pool
+	log  *zap.Logger
 }
 
-const (
-	carriageReturn = 0x0D
-)
+func NewVideoSwitcher(addr string, opts ...Option) *VideoSwitcher {
+	options := &options{
+		ttl:   30 * time.Second,
+		delay: 250 * time.Millisecond,
+		log:   zap.NewNop(),
+	}
 
-var (
-	_defaultTTL   = 30 * time.Second
-	_defaultDelay = 250 * time.Millisecond
-)
+	for _, o := range opts {
+		o.apply(options)
+	}
 
-func CreateVideoSwitcher(ctx context.Context, addr string, log connpool.Logger) (*VideoSwitcher, error) {
-	p := &VideoSwitcher{
-		Address: addr,
-		Pool: &connpool.Pool{
-			TTL:   _defaultTTL,
-			Delay: _defaultDelay,
+	return &VideoSwitcher{
+		log: options.log,
+		pool: &connpool.Pool{
+			TTL:   options.ttl,
+			Delay: options.delay,
 			NewConnection: func(ctx context.Context) (net.Conn, error) {
 				dial := net.Dialer{}
 				return dial.DialContext(ctx, "tcp", addr+":23")
 			},
-			Logger: log,
+			Logger: options.log.Sugar(),
 		},
 	}
-
-	return p, nil
 }

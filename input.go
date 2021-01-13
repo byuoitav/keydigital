@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/byuoitav/connpool"
+	"go.uber.org/zap"
 )
 
 var (
@@ -18,89 +19,74 @@ var (
 
 // AudioVideoInputs .
 func (vs *VideoSwitcher) AudioVideoInputs(ctx context.Context) (map[string]string, error) {
-	toReturn := make(map[string]string)
+	vs.log.Info("Getting the current inputs")
+	inputs := make(map[string]string)
 
-	var input string
+	err := vs.pool.Do(ctx, func(conn connpool.Conn) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(10 * time.Second)
+		}
 
-	if vs.Pool.Logger != nil {
-		vs.Pool.Logger.Infof("getting the current input")
-	}
-
-	err := vs.Pool.Do(ctx, func(conn connpool.Conn) error {
-
-		vs.Pool.Logger.Infof("writing to the connection")
+		if err := conn.SetDeadline(deadline); err != nil {
+			return fmt.Errorf("unable to set connection deadline: %w", err)
+		}
 
 		cmd := []byte("STA\r\n")
 		n, err := conn.Write(cmd)
 		switch {
 		case err != nil:
-			vs.Pool.Logger.Warnf("failed to write to connection")
-			return fmt.Errorf("failed to write to connection: %w", err)
+			return fmt.Errorf("unable to write to connection: %w", err)
 		case n != len(cmd):
-			return fmt.Errorf("failed to write to connection: wrote %v/%v bytes", n, len(cmd))
+			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(cmd))
 		}
 
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			deadline = time.Now().Add(5 * time.Second)
-		}
-
-		vs.Pool.Logger.Infof("reading from the connection")
 		var match [][]string
 		for len(match) == 0 {
-			c, err := conn.ReadUntil(carriageReturn, deadline)
+			buf, err := conn.ReadUntil(asciiCarriageReturn, deadline)
 			if err != nil {
-				vs.Pool.Logger.Warnf("failed to read from connection")
-				return fmt.Errorf("failed to read from connection: %w", err)
+				return fmt.Errorf("unable to read from connection: %w", err)
 			}
 
-			match = regGetInput.FindAllStringSubmatch(string(c), -1)
+			match = regGetInput.FindAllStringSubmatch(string(buf), -1)
 		}
 
-		input = match[0][1]
-		input = strings.TrimPrefix(input, "0")
+		inputs[""] = strings.TrimPrefix(match[0][1], "0")
 		return nil
 	})
 	if err != nil {
-		return toReturn, err
+		return inputs, err
 	}
 
-	if vs.Pool.Logger != nil {
-		vs.Pool.Logger.Infof(fmt.Sprintf("returning input - current input: %s", input))
-	}
-
-	// it looks like this only has one input/output but idk if that's true...
-	toReturn[""] = input
-
-	return toReturn, nil
-
+	vs.log.Info("Got inputs", zap.Any("inputs", inputs))
+	return inputs, nil
 }
 
 // SetAudioVideoInput .
 func (vs *VideoSwitcher) SetAudioVideoInput(ctx context.Context, output, input string) error {
-	return vs.Pool.Do(ctx, func(conn connpool.Conn) error {
+	output = "1"
+	vs.log.Info("Setting audio video input", zap.String("output", output), zap.String("input", input))
+	cmd := []byte(fmt.Sprintf("SPO0%sSI0%s\r\n", output, input))
 
-		if vs.Pool.Logger != nil {
-			vs.Pool.Logger.Infof(fmt.Sprintf("writing command to change input - change to input: %s", input))
+	return vs.pool.Do(ctx, func(conn connpool.Conn) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(10 * time.Second)
 		}
 
-		cmd := []byte(fmt.Sprintf("SPO0%sSI0%s\r\n", output, input))
+		if err := conn.SetDeadline(deadline); err != nil {
+			return fmt.Errorf("unable to set connection deadline: %w", err)
+		}
+
 		n, err := conn.Write(cmd)
 		switch {
 		case err != nil:
-			return fmt.Errorf("failed to write to connection: %w", err)
+			return fmt.Errorf("unable to write to connection: %w", err)
 		case n != len(cmd):
-			return fmt.Errorf("failed to write to connection: wrote %v/%v bytes", n, len(cmd))
+			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(cmd))
 		}
 
-		vs.Pool.Logger.Infof("reading from connection to see if there was an error")
-
-		deadline, ok := ctx.Deadline()
-		if !ok {
-			return fmt.Errorf("no deadline set")
-		}
-
-		buf, err := conn.ReadUntil(carriageReturn, deadline)
+		buf, err := conn.ReadUntil(asciiCarriageReturn, deadline)
 		if err != nil {
 			return fmt.Errorf("failed to read from connection: %w", err)
 		}
@@ -109,10 +95,7 @@ func (vs *VideoSwitcher) SetAudioVideoInput(ctx context.Context, output, input s
 			return ErrOutOfRange
 		}
 
-		if vs.Pool.Logger != nil {
-			vs.Pool.Logger.Infof(fmt.Sprintf("successfully changed the input - current input: %s", input))
-		}
-
+		vs.log.Info("Successfully set audio video input", zap.String("output", output), zap.String("input", input))
 		return nil
 	})
 }
