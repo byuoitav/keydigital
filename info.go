@@ -1,12 +1,6 @@
 package keydigital
 
-import (
-	"context"
-	"fmt"
-	"regexp"
-
-	"github.com/byuoitav/connpool"
-)
+/*
 
 var (
 	regIPAddr  = regexp.MustCompile("Host IP Address = ([0-9]{3}.[0-9]{3}.[0-9]{3}.[0-9]{3})")
@@ -88,3 +82,4 @@ func (vs *VideoSwitcher) Healthy(ctx context.Context) error {
 
 	return nil
 }
+*/
